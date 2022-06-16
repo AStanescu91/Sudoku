@@ -1,116 +1,149 @@
 package com.alex.sudokusolver;
 
 public class SudokuSolver {
-	private int[][] board;
-	private int[] rows;
-	private int[] cols;
-	private int[] cells;
-	private int[][] possibleBoard;
-	
-	public SudokuSolver(int[][] board) {
-		this.board = board;
-		this.possibleBoard = new int[board.length][board[0].length];
-		this.rows = new int[board.length];
-		this.cols = new int[board[0].length];
-		this.cells = new int[9];
-	}
-	
-	public int[][] solve() {
+	public static class Vectors {
+		public int[] rows;
+		public int[] cols;
+		public int[] blocks;
 		
+		public Vectors(int[] rows, int[] cols, int[] blocks) {
+			this.rows = rows;
+			this.cols = cols;
+			this.blocks = blocks;
+		}
 		
-		boolean oneBitSet = true;
-		while (oneBitSet) {
-			oneBitSet = false;
-			for (int row = 0; row < board.length; row++) {
-				for (int col = 0; col < board[0].length; col++) {
-					if (board[row][col] != 0) {
-						int shift = 0x1 << (board[row][col] - 1);
-						int cell = 3 * (int)(row / 3) + (col / 3);
+		public static Vectors toVectors(int[][] possibleBoard) {
+			int[] rows = new int[possibleBoard.length];
+			int[] cols = new int[possibleBoard[0].length];
+			int[] blocks = new int[9];
+			
+			for (int row = 0; row < possibleBoard.length; row++) {
+				for (int col = 0; col < possibleBoard[0].length; col++) {
+					if (possibleBoard[row][col] != 0) {
+						int shift = 0x1 << (possibleBoard[row][col] - 1);
+						int block = 3 * (int)(row / 3) + (col / 3);
 						
 						rows[row] |= shift;
 						cols[col] |= shift;
-						cells[cell] |= shift;	
+						blocks[block] |= shift;	
 					}
 				}
 			}
-			
-			for (int row = 0; row < board.length; row++) {
-				for (int col = 0; col < board[0].length; col++) {
-					if (board[row][col] == 0) {
-						int cell = 3 * (int)(row / 3) + (col / 3);
-						possibleBoard[row][col] = 0x1FF ^ (rows[row] | cols[col] | cells[cell]);
-						if (isOneBitSet(possibleBoard[row][col])) {
-							oneBitSet = true;
-							board[row][col] = log2(possibleBoard[row][col]) + 1;
+
+			return new Vectors(rows, cols, blocks);
+		}
+	}
+	
+	private Vectors vectors;
+	private int[][] board;
+	
+	public SudokuSolver(int[][] board) {
+		this.board = board;
+		this.vectors = Vectors.toVectors(board);
+	}
+	
+	public boolean solve() {
+		for (int row = 0; row < board.length; row++) {
+			for (int col = 0; col < board[0].length; col++) {
+				if (board[row][col] == 0) {
+					int block = 3 * (int)(row / 3) + (col / 3);
+					int possibleValues = 0x1FF ^ (vectors.rows[row] | vectors.cols[col] | vectors.blocks[block]);
+					if (possibleValues == 0) return false;
+					boolean solved = false;
+					for (int i = 0; i < 9; i++) {
+						int mask = (0x1 << i);
+						if ((possibleValues & mask) != 0) {
+							int value = log2(mask) + 1;
+							board[row][col] = value;
+							vectors.rows[row] |= mask;
+							vectors.cols[col] |= mask;
+							vectors.blocks[block] |= mask;
+							solved = solve();
+							if (solved) {
+								return solved;
+							}
+							board[row][col] = 0;
+							vectors.rows[row] &= ~mask;
+							vectors.cols[col] &= ~mask;
+							vectors.blocks[block] &= ~mask;
 						}
-					} else {
-						possibleBoard[row][col] = (0x1 << (board[row][col] - 1));
 					}
+					return false;
 				}
 			}
 		}
 		
-		return possibleBoard;
+		return true;
 	}
 	
-	public boolean isOneBitSet(int bits) {
-		if (bits == 0) return false;
-		int bitsMinusOne = bits - 1;
-		int maskedBits = bits & bitsMinusOne;
-		boolean notZero = (bits != 0 && maskedBits != 0);
-		return !notZero;
-	}
-	
-	private int log2(int n)
-    {
+	private int log2(int n) {
         int result = (int)(Math.log(n) / Math.log(2));
         return result;
     }
 	
-	public int[] getRows() { return this.rows; }
-	public int[] getCols() { return this.cols; }
-	public int[] getCells() { return this.cells; }
-	public int[][] getPossibleMatrix() { return this.possibleBoard; }
-	
-	public static void main(String[] args) {
-		int[][] board = new int[][] {
-			{0, 0, 5, 3, 4, 2, 0, 8, 0},
-			{4, 0, 0, 0, 0, 0, 0, 0, 0},
-			{6, 8, 0, 1, 0, 0, 0, 5, 0},
-			{0, 0, 4, 0, 1, 0, 0, 3, 0},
-			{1, 3, 2, 6, 0, 5, 0, 0, 0},
-			{0, 9, 0, 7, 0, 4, 1, 0, 2},
-			{0, 4, 0, 0, 0, 1, 7, 0, 0},
-			{2, 0, 6, 4, 7, 3, 8, 0, 1},
-			{0, 7, 1, 9, 0, 6, 0, 4, 0}
-		};
-		
-		SudokuSolver solver = new SudokuSolver(board);
-		int[][] solved = solver.solve();
-		
-		for (int row = 0; row < solved.length; row++) {
-			for (int col = 0; col < solved[0].length; col++) {
-				System.out.print(String.format("% 4d", board[row][col]) + " ");
-			}
-			System.out.println();
-		}
-		
-		System.out.println("\n\n");
-		
-		for (int row = 0; row < solved.length; row++) {
-			for (int col = 0; col < solved[0].length; col++) {
-				System.out.print(String.format("% 4d", solved[row][col]) + " ");
-			}
-			System.out.println();
-		}
-		
-		System.out.println("\n\n");
-		
-		for (int row = 0; row < solved.length; row++) {
-			for (int col = 0; col < solved[0].length; col++) {
-				System.out.print(String.format("%8b", solver.isOneBitSet(solved[row][col])) + " ");
+	public void printBoard() {
+		for (int row = 0; row < board.length; row++) {
+			for (int col = 0; col < board[0].length; col++) {
+				System.out.print(board[row][col] + " ");
 			}
 			System.out.println();
 		}
 	}
+	
+	public static void main(String[] args) {
+		int[][] board = new int[][] {
+			{0, 2, 0, 0, 1, 4, 0, 0, 0},
+			{6, 0, 8, 0, 0, 0, 0, 0, 0},
+			{0, 0, 0, 0, 0, 0, 0, 0, 0},
+			{0, 0, 0, 6, 0, 0, 0, 3, 8},
+			{0, 1, 0, 0, 0, 0, 0, 0, 0},
+			{0, 0, 0, 0, 0, 0, 0, 6, 0},
+			{0, 4, 0, 0, 7, 0, 1, 0, 0},
+			{5, 0, 0, 0, 0, 0, 2, 0, 0},
+			{3, 0, 0, 8, 0, 0, 0, 0, 0}
+		};
+		
+		int[][] hardestEverSudoku = new int[][] {
+			{8, 0, 0, 0, 0, 0, 0, 0, 0},
+			{0, 0, 3, 6, 0, 0, 0, 0, 0},
+			{0, 7, 0, 0, 9, 0, 2, 0, 0},
+			{0, 5, 0, 0, 0, 7, 0, 0, 0},
+			{0, 0, 0, 0, 4, 5, 7, 0, 0},
+			{0, 0, 0, 1, 0, 0, 0, 3, 0},
+			{0, 0, 1, 0, 0, 0, 0, 6, 8},
+			{0, 0, 8, 5, 0, 0, 0, 1, 0},
+			{0, 9, 0, 0, 0, 0, 4, 0, 0}
+		};
+		
+		int[][] anotherSudoku = new int[][] {
+			{0, 0, 9, 3, 0, 0, 0, 0, 0},
+			{8, 0, 0, 0, 0, 0, 0, 2, 0},
+			{0, 7, 0, 0, 1, 0, 5, 0, 0},
+			{4, 0, 0, 0, 0, 5, 3, 0, 0},
+			{0, 1, 0, 0, 7, 0, 0, 0, 6},
+			{0, 0, 3, 2, 0, 0, 0, 8, 0},
+			{0, 6, 0, 5, 0, 0, 0, 0, 9},
+			{0, 0, 4, 0, 0, 0, 0, 3, 0},
+			{0, 0, 0, 0, 0, 9, 7, 0, 0}
+		};
+		
+		int[][] manyGiven = new int[][] {
+			{0, 2, 3, 0, 6, 5, 0, 8, 9},
+			{9, 0, 0, 0, 0, 4, 0, 0, 5},
+			{5, 0, 0, 9, 0, 0, 0, 0, 0},
+			{6, 0, 0, 3, 0, 0, 0, 1, 8},
+			{3, 8, 0, 5, 9, 0, 0, 0, 2},
+			{0, 0, 0, 0, 8, 6, 3, 0, 0},
+			{2, 3, 0, 0, 0, 0, 0, 0, 6},
+			{8, 0, 7, 0, 2, 0, 0, 0, 3},
+			{0, 9, 6, 0, 5, 3, 8, 2, 0}
+		};
+		
+		SudokuSolver solver = new SudokuSolver(manyGiven);
+		solver.printBoard();
+		System.out.println();
+		boolean solvable = solver.solve();
+		solver.printBoard();
+	}
+
 }
